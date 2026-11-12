@@ -39,3 +39,5 @@ pactl (громкость), playerctl (медиа), xdg-open (ссылки и п
 - Нет голоса: `sudo apt install espeak-ng pulseaudio-utils`
 - Не слышит микрофон: `arecord -l`, затем укажите устройство в `FLEY_MIC_DEVICE`
 - Лог ошибок: `~/.local/share/fley-ai/fley.log`
+
+Я не могу дать свой API, потому что сервис меня заблокирует за превышение лимитов. Но ты можешь прямо сейчас за 1 минуту получить свой собственный бесплатный ключ вот здесь: https://console.groq.com/keys и вставить в .env GROQ_API_KEY=<Таое API>
