@@ -4,6 +4,10 @@
 Логика (`src/core.hpp`) общая с Windows-версией, окно переписано на GTK3.
 
 ## Запуск (один скрипт)
+```bash
+bash bulid.sh
+
+```
 
 ```bash
 unzip FLEY_AI_LINUX.zip && cd FLEY_AI_LINUX
