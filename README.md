@@ -1,6 +1,10 @@
 # FLEY AI для Linux
 FLEY AI-Voce is an AI voice assistant that not only talks to you but can also control your PC.
 
+![Image description](1.jpg)
+
+
+![Image description](2.jpg)
 
 Тот же FLEY AI, но под Linux.
 FLEY AI-Voce — голосовой AI-ассистент, который не только будет с вами разговаривать, но и сможет управлять вашим ПК: открывать ссылки, сайты и программы, создавать файлы, презентации, писать код и даже выключать и включать ПК, работать с принтером и делать практически что угодно.
