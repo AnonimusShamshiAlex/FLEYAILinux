@@ -158,7 +158,7 @@ static gboolean OnDraw(GtkWidget* w, cairo_t* cr, gpointer) {
     Text(cr, "F L E Y   A I", 24, 16, 0, 22 * std::max(0.8, g.s), C_CYAN, 1, 0, true);
     std::string model;
     { std::lock_guard<std::mutex> lk(fl_mx); model = fl_model; }
-    Text(cr, "FLEY Industries  ·  " + model, 24, 16 + 28 * std::max(0.8, g.s), 0, 12, C_CYAN, 0.55, 0, false, true);
+    Text(cr, "FLEY Industries  ·  " + model + "  ·  " + kVersion, 24, 16 + 28 * std::max(0.8, g.s), 0, 12, C_CYAN, 0.55, 0, false, true);
     time_t t = time(nullptr);
     char clk[16];
     strftime(clk, sizeof clk, "%H:%M:%S", localtime(&t));

@@ -25,6 +25,7 @@
 using namespace fley;
 namespace fs = std::filesystem;
 
+static const char* kVersion = "linux 0.7";
 enum State { IDLE = 0, LISTENING = 1, THINKING = 2, SPEAKING = 3 };
 
 // ------------------------------------------------------------------ общее состояние
@@ -38,7 +39,7 @@ struct LogEntry { int role; std::string text; };
 static std::vector<LogEntry> fl_logv;
 static Settings fl_set;
 static std::vector<std::pair<std::string, std::string>> fl_hist;
-static std::string fl_dir, fl_envPath, fl_edge, fl_edgeVoice;
+static std::string fl_dir, fl_envPath, fl_edge, fl_edgeVoice, fl_player;
 static bool (*fl_confirmFn)(const std::string&) = nullptr;
 
 // ------------------------------------------------------------------ утилиты
@@ -92,7 +93,20 @@ static std::string RunCapture(const std::string& cmd, int timeoutSec, int* code 
     if (code) *code = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
     return out;
 }
-static void Detach(const std::string& cmd) { system(("(setsid sh -c " + Q(cmd) + " >/dev/null 2>&1 &)").c_str()); }
+static void Detach(const std::string& cmd) {  // запуск программы полностью отдельно от FLEY: свой сеанс, без наследования дескрипторов
+    pid_t p = fork();
+    if (p == 0) {
+        pid_t q = fork();
+        if (q != 0) _exit(0);
+        setsid();
+        int dn = open("/dev/null", O_RDWR);
+        if (dn >= 0) { dup2(dn, 0); dup2(dn, 1); dup2(dn, 2); }
+        for (int fd = 3; fd < 1024; ++fd) close(fd);
+        execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
+        _exit(127);
+    }
+    if (p > 0) { int st; waitpid(p, &st, 0); }
+}
 static bool ShellOpen(const std::string& target) {
     if (!HaveCmd("xdg-open")) return false;
     Detach("xdg-open " + Q(target));
@@ -205,6 +219,8 @@ static void LoadSettings() {
     fl_set = make_settings(env);
     auto ev = env.find("FLEY_EDGE_VOICE");
     fl_edgeVoice = ev == env.end() ? std::string() : trim(ev->second);
+    auto pv = env.find("FLEY_PLAYER");
+    fl_player = pv == env.end() ? std::string() : lower_utf8(trim(pv->second));
     if (fl_edge.empty()) DetectEdge();
     { std::lock_guard<std::mutex> lk(fl_mx); fl_model = fl_set.model; }
     static int lastAuto = -1;
@@ -457,9 +473,15 @@ static std::atomic<pid_t> fl_playPid{0};
 static bool PlayFile(const std::string& path) {
     bool mp3 = path.size() > 4 && path.compare(path.size() - 4, 4, ".mp3") == 0;
     std::vector<std::vector<std::string>> players;
-    if (mp3) players = {{"mpg123", "-q", path}, {"ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", path}, {"mpv", "--no-video", "--really-quiet", path}, {"play", "-q", path}};
+    if (mp3) {
+        std::vector<std::vector<std::string>> all = {{"mpg123", "-q", "-b", "2048", path}, {"ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", path},
+                                                     {"mpv", "--no-video", "--really-quiet", path}, {"play", "-q", path}};
+        for (auto& a : all) if (a[0] == fl_player) players.push_back(a);  // выбранный в FLEY_PLAYER - первым
+        for (auto& a : all) players.push_back(a);
+    }
     else players = {{"paplay", path}, {"pw-play", path}, {"aplay", "-q", path},
                     {"ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", path}, {"play", "-q", path}, {"mpv", "--no-video", "--really-quiet", path}};
+    bool started = false;
     for (auto& a : players) {
         if (!HaveCmd(a[0])) continue;
         std::vector<char*> av;
@@ -474,16 +496,24 @@ static bool PlayFile(const std::string& path) {
         }
         if (pid < 0) continue;
         fl_playPid = pid;
+        started = true;
         int st = 0;
+        bool timedOut = false;
+        std::error_code fec;
+        long long sz = (long long)fs::file_size(path, fec);
+        long long deadline = NowMs() + (mp3 ? sz / 3 : sz / 14) + 12000;  // запас: звук не должен играть дольше этого
         while (true) {
             pid_t w = waitpid(pid, &st, WNOHANG);
             if (w == pid || w < 0) break;
             if (fl_stopSpeak || fl_closing) { kill(pid, SIGTERM); waitpid(pid, &st, 0); fl_playPid = 0; return true; }
+            if (NowMs() > deadline) { kill(pid, SIGKILL); waitpid(pid, &st, 0); timedOut = true; break; }
             SleepMs(40);
         }
         fl_playPid = 0;
+        if (timedOut) { LogLine("play: " + a[0] + " завис, остановлен"); PostLog(2, "(проигрыватель " + a[0] + " завис - остановлен)"); continue; }
         if (WIFEXITED(st) && WEXITSTATUS(st) == 0) return true;
     }
+    if (started) return true;
     throw std::runtime_error("Не найден проигрыватель звука. Выполните: sudo apt install mpg123 pulseaudio-utils alsa-utils");
 }
 static void PlayPcm(const std::string& pcm, int rate) {
@@ -533,13 +563,16 @@ static std::string SynthLocal(const std::string& text) {
         try { std::string f = SynthEdge(text); fl_edgeFails = 0; return f; }
         catch (const std::exception& e) {
             LogLine(std::string("tts-edge: ") + e.what());
+            PostLog(2, "(нейро-голос не ответил: нет доступа к интернету/Microsoft? говорю запасным голосом-роботом)");
             if (++fl_edgeFails >= 2) { fl_edgeSkipUntil = NowMs() + 60000; fl_edgeFails = 0; }
         }
     }
     return SynthEspeak(text);
 }
+static void CloseMic();
 static void SpeakAnswer(const std::string& answer) {
     fl_stopSpeak = 0;
+    CloseMic();  // на время озвучки микрофон не держим: так звук не зависает на виртуальных звуковых картах
     if (!fl_set.windows_tts) {
         try {
             int rate = 24000;
@@ -579,7 +612,13 @@ static double fl_noiseFloor = 150.0, fl_micGain = 0.0;
 static void CloseMic() {
     if (fl_micFd >= 0) { close(fl_micFd); fl_micFd = -1; }
     pid_t p = fl_micPid.exchange(0);
-    if (p > 0) { kill(p, SIGTERM); int st; waitpid(p, &st, 0); }
+    if (p > 0) {
+        kill(p, SIGTERM);
+        for (int i = 0; i < 25; ++i) { int st; if (waitpid(p, &st, WNOHANG) != 0) return; SleepMs(40); }
+        kill(p, SIGKILL);  // не дожидаемся бесконечно, если запись не остановилась
+        int st;
+        waitpid(p, &st, 0);
+    }
 }
 static void KillMicNow() { pid_t p = fl_micPid; if (p > 0) kill(p, SIGTERM); }
 static void OpenMic() {
@@ -601,7 +640,7 @@ static void OpenMic() {
     for (auto& s : a) av.push_back((char*)s.c_str());
     av.push_back(nullptr);
     int fds[2];
-    if (pipe(fds) != 0) throw std::runtime_error("Не удалось открыть микрофон (pipe).");
+    if (pipe2(fds, O_CLOEXEC) != 0) throw std::runtime_error("Не удалось открыть микрофон (pipe).");
     pid_t pid = fork();
     if (pid == 0) {
         dup2(fds[1], 1);
@@ -1130,11 +1169,14 @@ static void ProcessUtterance(const std::string& wav) {
         return;
     }
     static long long activeUntil = 0;
+    PostLog(0, text);
     if (!fl_set.wake.empty()) {
-        if (!has_wake_word(text, fl_set.wake) && NowMs() > activeUntil) { SetStatus("Жду обращения: «" + fl_set.wake + "»"); return; }
+        if (!has_wake_word(text, fl_set.wake) && NowMs() > activeUntil) {
+            PostLog(2, "(не отвечаю: включено слово-активатор «" + fl_set.wake + "». Начните фразу со слова «" + fl_set.wake + "» или удалите FLEY_WAKE в настройках)");
+            return;
+        }
         activeUntil = NowMs() + 25000;
     }
-    PostLog(0, text);
 
     std::vector<Action> acts;
     std::string answer;
@@ -1209,6 +1251,7 @@ static void ProcessUtterance(const std::string& wav) {
 // ------------------------------------------------------------------ постоянный диалог: слушаю -> отвечаю -> слушаю
 static void StartupCheck() {
     auto line = [&](bool ok, const std::string& label, const std::string& fix) { PostLog(2, std::string(ok ? "✓ " : "✗ ") + label + (ok ? "" : " - " + fix)); };
+    PostLog(2, std::string("FLEY AI ") + kVersion);
     if (getuid() == 0) PostLog(2, "! Запущено от root: звук и микрофон часто не работают. Лучше запускать от обычного пользователя.");
     line(HaveCmd("curl"), "curl", "sudo apt install curl");
     line(HaveCmd("arecord") || HaveCmd("parec") || HaveCmd("pw-record"), "микрофон (arecord)", "sudo apt install alsa-utils");
@@ -1217,7 +1260,8 @@ static void StartupCheck() {
     else PostLog(2, "! Голос-робот espeak-ng. Для нормального голоса запустите: bash build.sh (поставит Edge-TTS)");
     HttpRes r = CurlReq("https://" + fl_set.host, "", nullptr, "", 8);
     line(r.status != 0, "связь с " + fl_set.host, "нет интернета/VPN (код curl " + std::to_string(r.err) + ")");
-    PostLog(2, "Скажите что-нибудь: например «привет» или «открой браузер».");
+    if (!fl_set.wake.empty()) PostLog(2, "! Включено слово-активатор: начинайте фразу со слова «" + fl_set.wake + "» (например «" + fl_set.wake + ", привет»). Отключить: убрать FLEY_WAKE в .env");
+    else PostLog(2, "Скажите что-нибудь: например «привет» или «открой браузер».");
 }
 static void SessionThread() {
     bool keyShown = false;
@@ -1295,6 +1339,7 @@ static void SessionThread() {
             if (std::string(e.what()).find("микрофон") != std::string::npos) fl_online = 0;
             for (int i = 0; i < 30 && !fl_closing; ++i) SleepMs(100);
         } catch (...) {
+            PostLog(2, "ОШИБКА: неизвестный сбой");
             SetStatus("Неизвестная ошибка.", true);
             SleepMs(1500);
         }
