@@ -28,18 +28,18 @@ namespace fs = std::filesystem;
 enum State { IDLE = 0, LISTENING = 1, THINKING = 2, SPEAKING = 3 };
 
 // ------------------------------------------------------------------ общее состояние
-static std::atomic<int> g_state{IDLE}, g_keyErr{0}, g_remFlag{0}, g_online{1}, g_stopSpeak{0}, g_closing{0};
-static std::atomic<int> g_clearReq{0}, g_taint{0}, g_ensurePlay{0}, g_reloadReq{0}, g_showSet{0};
-static std::atomic<int> g_level1000{0}, g_factCount{0};
-static std::mutex g_mx;
-static std::string g_status = "Запуск…", g_model;
-static bool g_statusErr = false;
+static std::atomic<int> fl_state{IDLE}, fl_keyErr{0}, fl_remFlag{0}, fl_online{1}, fl_stopSpeak{0}, fl_closing{0};
+static std::atomic<int> fl_clearReq{0}, fl_taint{0}, fl_ensurePlay{0}, fl_reloadReq{0}, fl_showSet{0};
+static std::atomic<int> fl_level1000{0}, fl_factCount{0};
+static std::mutex fl_mx;
+static std::string fl_status = "Запуск…", fl_model;
+static bool fl_statusErr = false;
 struct LogEntry { int role; std::string text; };
-static std::vector<LogEntry> g_log;
-static Settings g_set;
-static std::vector<std::pair<std::string, std::string>> g_hist;
-static std::string g_dir, g_envPath;
-static bool (*g_confirmFn)(const std::string&) = nullptr;
+static std::vector<LogEntry> fl_logv;
+static Settings fl_set;
+static std::vector<std::pair<std::string, std::string>> fl_hist;
+static std::string fl_dir, fl_envPath;
+static bool (*fl_confirmFn)(const std::string&) = nullptr;
 
 // ------------------------------------------------------------------ утилиты
 static std::string Home() { const char* h = getenv("HOME"); return (h && *h) ? h : "/tmp"; }
@@ -67,17 +67,17 @@ static void LogLine(const std::string& msg) {
     char ts[32];
     time_t t = time(nullptr);
     strftime(ts, sizeof ts, "%Y-%m-%d %H:%M:%S ", localtime(&t));
-    WriteFileS(g_dir + "/fley.log", std::string(ts) + msg + "\n", true);
+    WriteFileS(fl_dir + "/fley.log", std::string(ts) + msg + "\n", true);
 }
 static void SetStatus(const std::string& t, bool err = false) {
-    std::lock_guard<std::mutex> lk(g_mx);
-    g_status = t;
-    g_statusErr = err;
+    std::lock_guard<std::mutex> lk(fl_mx);
+    fl_status = t;
+    fl_statusErr = err;
 }
 static void PostLog(int role, const std::string& text) {
-    std::lock_guard<std::mutex> lk(g_mx);
-    g_log.push_back({role, text});
-    if (g_log.size() > 200) g_log.erase(g_log.begin(), g_log.begin() + 50);
+    std::lock_guard<std::mutex> lk(fl_mx);
+    fl_logv.push_back({role, text});
+    if (fl_logv.size() > 200) fl_logv.erase(fl_logv.begin(), fl_logv.begin() + 50);
 }
 static bool HaveCmd(const std::string& c) { return system(("command -v " + Q(c) + " >/dev/null 2>&1").c_str()) == 0; }
 static std::string RunCapture(const std::string& cmd, int timeoutSec, int* code = nullptr) {
@@ -136,9 +136,9 @@ static HttpRes CurlReq(const std::string& url, const std::string& ctype, const s
     return r;
 }
 static HttpRes HttpPost(const std::string& path, const std::string& ctype, const std::string& body, bool tts = false) {
-    const std::string& host = tts ? g_set.tts_host : g_set.host;
-    const std::string& base = tts ? g_set.tts_path : g_set.base_path;
-    const std::string& key = tts ? g_set.tts_key : g_set.key;
+    const std::string& host = tts ? fl_set.tts_host : fl_set.host;
+    const std::string& base = tts ? fl_set.tts_path : fl_set.base_path;
+    const std::string& key = tts ? fl_set.tts_key : fl_set.key;
     return CurlReq("https://" + host + base + path, ctype, &body, key, 90);
 }
 static std::string HttpGetPage(const std::string& url) { return CurlReq(url, "", nullptr, "", 20).body; }
@@ -170,20 +170,20 @@ static void InitPaths() {
     const char* xc = getenv("XDG_CONFIG_HOME");
     const char* xd = getenv("XDG_DATA_HOME");
     std::string cfg = ((xc && *xc) ? std::string(xc) : Home() + "/.config") + "/fley-ai";
-    g_dir = ((xd && *xd) ? std::string(xd) : Home() + "/.local/share") + "/fley-ai";
+    fl_dir = ((xd && *xd) ? std::string(xd) : Home() + "/.local/share") + "/fley-ai";
     MkDirs(cfg);
-    MkDirs(g_dir);
-    g_envPath = cfg + "/.env";
+    MkDirs(fl_dir);
+    fl_envPath = cfg + "/.env";
     std::error_code ec;
     fs::path exe = fs::read_symlink("/proc/self/exe", ec);
     if (!ec) {
         std::string beside = exe.parent_path().string() + "/.env";  // .env рядом с программой главнее
-        if (fs::exists(beside, ec)) g_envPath = beside;
+        if (fs::exists(beside, ec)) fl_envPath = beside;
     }
 }
 static void EnsureEnvFile() {
     std::error_code ec;
-    if (!fs::exists(g_envPath, ec)) WriteFileS(g_envPath, kEnvTemplate);
+    if (!fs::exists(fl_envPath, ec)) WriteFileS(fl_envPath, kEnvTemplate);
 }
 static void ApplyAutostart(bool on) {
     std::string d = Home() + "/.config/autostart", f = d + "/fley-ai.desktop";
@@ -196,50 +196,50 @@ static void ApplyAutostart(bool on) {
     }
 }
 static void LoadSettings() {
-    g_set = make_settings(parse_env(ReadFileS(g_envPath)));
-    { std::lock_guard<std::mutex> lk(g_mx); g_model = g_set.model; }
+    fl_set = make_settings(parse_env(ReadFileS(fl_envPath)));
+    { std::lock_guard<std::mutex> lk(fl_mx); fl_model = fl_set.model; }
     static int lastAuto = -1;
-    if (lastAuto != (int)g_set.autostart) { lastAuto = (int)g_set.autostart; ApplyAutostart(g_set.autostart); }
+    if (lastAuto != (int)fl_set.autostart) { lastAuto = (int)fl_set.autostart; ApplyAutostart(fl_set.autostart); }
 }
 static bool NeedKey() {
-    if (!g_set.key.empty()) return false;
-    g_showSet = 1;
+    if (!fl_set.key.empty()) return false;
+    fl_showSet = 1;
     SetStatus("Нужен API-ключ: создайте бесплатный на console.groq.com/keys и вставьте в настройках.", true);
     return true;
 }
-static bool NeedConfirm() { return g_set.confirm || g_taint; }
-static bool Confirm(const std::string& what) { return g_confirmFn ? g_confirmFn(what) : true; }
+static bool NeedConfirm() { return fl_set.confirm || fl_taint; }
+static bool Confirm(const std::string& what) { return fl_confirmFn ? fl_confirmFn(what) : true; }
 
 // ------------------------------------------------------------------ память и история
-static std::vector<std::string> g_facts;
-static std::string MemPath() { return g_dir + "/fley_memory.txt"; }
+static std::vector<std::string> fl_facts;
+static std::string MemPath() { return fl_dir + "/fley_memory.txt"; }
 static void LoadMemory() {
-    g_facts.clear();
+    fl_facts.clear();
     std::string d = ReadFileS(MemPath());
     size_t p = 0;
     while (p < d.size()) {
         size_t e = d.find('\n', p);
         std::string line = trim(d.substr(p, e == std::string::npos ? std::string::npos : e - p));
-        if (!line.empty()) g_facts.push_back(line);
+        if (!line.empty()) fl_facts.push_back(line);
         if (e == std::string::npos) break;
         p = e + 1;
     }
-    g_factCount = (int)g_facts.size();
+    fl_factCount = (int)fl_facts.size();
 }
 static void SaveMemory() {
     std::string o;
-    for (auto& f : g_facts) o += f + "\n";
+    for (auto& f : fl_facts) o += f + "\n";
     WriteFileS(MemPath(), o);
-    g_factCount = (int)g_facts.size();
+    fl_factCount = (int)fl_facts.size();
 }
 static std::string MemoryBlock() {
-    if (g_facts.empty()) return "";
+    if (fl_facts.empty()) return "";
     std::vector<std::string> pick;
     size_t total = 0;
-    for (size_t i = g_facts.size(); i-- > 0;) {
-        if (total + g_facts[i].size() > 2500) break;
-        total += g_facts[i].size() + 3;
-        pick.push_back(g_facts[i]);
+    for (size_t i = fl_facts.size(); i-- > 0;) {
+        if (total + fl_facts[i].size() > 2500) break;
+        total += fl_facts[i].size() + 3;
+        pick.push_back(fl_facts[i]);
     }
     std::string m = "\nДОЛГОВРЕМЕННАЯ ПАМЯТЬ (факты о пользователе, которые ты помнишь):\n";
     for (size_t i = pick.size(); i-- > 0;) m += "- " + pick[i] + "\n";
@@ -260,23 +260,23 @@ static std::string UnescLine(const std::string& s) {
 }
 static void SaveHistory() {
     std::string o;
-    size_t from = g_hist.size() > 40 ? g_hist.size() - 40 : 0;
-    for (size_t i = from; i < g_hist.size(); ++i)
-        o += std::string(g_hist[i].first == "user" ? "U\t" : "A\t") + EscLine(utf8_truncate(g_hist[i].second, 1500)) + "\n";
-    WriteFileS(g_dir + "/fley_history.txt", o);
+    size_t from = fl_hist.size() > 40 ? fl_hist.size() - 40 : 0;
+    for (size_t i = from; i < fl_hist.size(); ++i)
+        o += std::string(fl_hist[i].first == "user" ? "U\t" : "A\t") + EscLine(utf8_truncate(fl_hist[i].second, 1500)) + "\n";
+    WriteFileS(fl_dir + "/fley_history.txt", o);
 }
 static void LoadHistory() {
-    g_hist.clear();
-    std::string d = ReadFileS(g_dir + "/fley_history.txt");
+    fl_hist.clear();
+    std::string d = ReadFileS(fl_dir + "/fley_history.txt");
     size_t p = 0;
     while (p < d.size()) {
         size_t e = d.find('\n', p);
         std::string line = d.substr(p, e == std::string::npos ? std::string::npos : e - p);
-        if (line.size() >= 2 && line[1] == '\t') g_hist.push_back({line[0] == 'U' ? "user" : "assistant", UnescLine(line.substr(2))});
+        if (line.size() >= 2 && line[1] == '\t') fl_hist.push_back({line[0] == 'U' ? "user" : "assistant", UnescLine(line.substr(2))});
         if (e == std::string::npos) break;
         p = e + 1;
     }
-    while (!g_hist.empty() && g_hist.front().first != "user") g_hist.erase(g_hist.begin());
+    while (!fl_hist.empty() && fl_hist.front().first != "user") fl_hist.erase(fl_hist.begin());
 }
 
 // ------------------------------------------------------------------ промпты
@@ -344,10 +344,10 @@ static std::string UserInfo() {
 // ------------------------------------------------------------------ ИИ: распознавание, чат, озвучка
 static std::string Transcribe(const std::string& wav) {
     static long long lastStt = 0;  // не чаще ~1 запроса в 2.5 с (лимит Groq 20 запросов в минуту)
-    while (NowMs() - lastStt < 2500 && !g_closing) SleepMs(100);
+    while (NowMs() - lastStt < 2500 && !fl_closing) SleepMs(100);
     lastStt = NowMs();
-    std::vector<std::string> models{g_set.stt};
-    if (g_set.groq)
+    std::vector<std::string> models{fl_set.stt};
+    if (fl_set.groq)
         for (const char* m : {"whisper-large-v3-turbo", "whisper-large-v3"})
             if (std::find(models.begin(), models.end(), std::string(m)) == models.end()) models.push_back(m);
     HttpRes r;
@@ -355,8 +355,8 @@ static std::string Transcribe(const std::string& wav) {
         Multipart mp;
         mp.field("model", models[i]);
         mp.field("temperature", "0");
-        if (g_set.groq) mp.field("response_format", "verbose_json");
-        if (!g_set.stt_lang.empty()) mp.field("language", g_set.stt_lang);
+        if (fl_set.groq) mp.field("response_format", "verbose_json");
+        if (!fl_set.stt_lang.empty()) mp.field("language", fl_set.stt_lang);
         mp.field("prompt", "FLEY AI, Джарвис, ютуб, YouTube, Телеграм, Спотифай, Хром, включи музыку, открой, найди, громкость, запомни.");
         mp.file("file", "speech.wav", "audio/wav", wav);
         r = HttpPost("/audio/transcriptions", mp.content_type(), mp.finish());
@@ -367,11 +367,11 @@ static std::string Transcribe(const std::string& wav) {
     Json j;
     if (!json_parse(r.body, j)) throw std::runtime_error("Сервер вернул непонятный ответ при распознавании речи.");
     if (j["error"].t != Json::Null) throw std::runtime_error(explain_error(500, r.body));
-    if (g_set.groq && stt_low_confidence(j)) { LogLine("stt: низкая уверенность, пропускаю: " + j["text"].str()); return ""; }
+    if (fl_set.groq && stt_low_confidence(j)) { LogLine("stt: низкая уверенность, пропускаю: " + j["text"].str()); return ""; }
     return trim(j["text"].str());
 }
 static std::string ReasoningField(const std::string& model, const std::string& effort) {
-    if (g_set.groq && model.find("gpt-oss") != std::string::npos) return "\"reasoning_effort\":\"" + effort + "\",";
+    if (fl_set.groq && model.find("gpt-oss") != std::string::npos) return "\"reasoning_effort\":\"" + effort + "\",";
     return "";
 }
 static std::string Chat(const std::string& userText, std::vector<Action>& acts) {
@@ -379,27 +379,27 @@ static std::string Chat(const std::string& userText, std::vector<Action>& acts) 
     char dt[32];
     time_t t = time(nullptr);
     strftime(dt, sizeof dt, "%d.%m.%Y %H:%M", localtime(&t));
-    std::string sys = std::string(kSystemPrompt) + kJarvisStyle + (g_set.pc ? kActionsPrompt : kTalkOnly) + "Сейчас " + dt + "." + UserInfo() + MemoryBlock();
-    if (!g_set.call_me.empty()) sys += " Обращайся к пользователю: «" + g_set.call_me + "».";
+    std::string sys = std::string(kSystemPrompt) + kJarvisStyle + (fl_set.pc ? kActionsPrompt : kTalkOnly) + "Сейчас " + dt + "." + UserInfo() + MemoryBlock();
+    if (!fl_set.call_me.empty()) sys += " Обращайся к пользователю: «" + fl_set.call_me + "».";
 
     std::vector<std::string> models;
-    models.push_back(g_set.model);
-    if (g_set.groq) {
+    models.push_back(fl_set.model);
+    if (fl_set.groq) {
         const char* fb[] = {"openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3.6-27b"};
         for (const char* m : fb)
             if (std::find(models.begin(), models.end(), std::string(m)) == models.end()) models.push_back(m);
     }
-    const std::string effort = g_set.effort;
-    g_hist.push_back({"user", userText});
+    const std::string effort = fl_set.effort;
+    fl_hist.push_back({"user", userText});
     try {
         HttpRes r;
         std::string used;
         for (size_t mi = 0; mi < models.size(); ++mi) {
-            std::string body = "{\"model\":\"" + json_escape(models[mi]) + "\",\"" + (g_set.openrouter ? "max_tokens" : "max_completion_tokens") +
+            std::string body = "{\"model\":\"" + json_escape(models[mi]) + "\",\"" + (fl_set.openrouter ? "max_tokens" : "max_completion_tokens") +
                                "\":450," + ReasoningField(models[mi], effort) + "\"messages\":[{\"role\":\"system\",\"content\":\"" + json_escape(sys) + "\"}";
-            size_t from = g_hist.size() > 10 ? g_hist.size() - 10 : 0;
-            for (size_t i = from; i < g_hist.size(); ++i)
-                body += ",{\"role\":\"" + g_hist[i].first + "\",\"content\":\"" + json_escape(g_hist[i].second) + "\"}";
+            size_t from = fl_hist.size() > 10 ? fl_hist.size() - 10 : 0;
+            for (size_t i = from; i < fl_hist.size(); ++i)
+                body += ",{\"role\":\"" + fl_hist[i].first + "\",\"content\":\"" + json_escape(fl_hist[i].second) + "\"}";
             body += "]}";
             r = HttpPost("/chat/completions", "application/json", body);
             used = models[mi];
@@ -410,31 +410,31 @@ static std::string Chat(const std::string& userText, std::vector<Action>& acts) 
             break;
         }
         CheckHttp(r);
-        if (used != g_set.model) g_set.model = used;
+        if (used != fl_set.model) fl_set.model = used;
         Json j;
         if (!json_parse(r.body, j)) throw std::runtime_error("Сервер вернул непонятный ответ.");
         if (j["error"].t != Json::Null) throw std::runtime_error(explain_error(500, r.body));
         std::string raw = j["choices"].at(0)["message"]["content"].str();
-        std::string visible = g_set.pc ? extract_actions(raw, acts) : raw;
+        std::string visible = fl_set.pc ? extract_actions(raw, acts) : raw;
         std::string ans = clean_text(visible);
         if (ans.empty() && acts.empty()) ans = "Не нашёл, что ответить.";
-        g_hist.push_back({"assistant", g_set.pc ? trim(raw) : ans});
+        fl_hist.push_back({"assistant", fl_set.pc ? trim(raw) : ans});
         SaveHistory();
         return ans;
     } catch (...) {
-        g_hist.pop_back();
+        fl_hist.pop_back();
         throw;
     }
 }
 static std::string Speak(const std::string& text, int& rate) {  // облачная озвучка (OpenAI/OpenRouter)
-    std::string body = "{\"model\":\"" + json_escape(g_set.tts) + "\",\"voice\":\"" + json_escape(g_set.voice) +
+    std::string body = "{\"model\":\"" + json_escape(fl_set.tts) + "\",\"voice\":\"" + json_escape(fl_set.voice) +
                        "\",\"response_format\":\"pcm\",\"input\":\"" + json_escape(utf8_truncate(text, 4000)) + "\"";
-    if (g_set.tts.find("gpt-4o") != std::string::npos)
+    if (fl_set.tts.find("gpt-4o") != std::string::npos)
         body += ",\"instructions\":\"Ты озвучиваешь ИИ-дворецкого JARVIS из фильма «Железный человек». "
                 "Голос мужской, спокойный, интеллигентный, с лёгкой сдержанной иронией и тёплой уверенностью. "
                 "Говори естественно, с живыми интонациями. Темп ровный. Язык - тот, на котором написан текст.\"";
     body += "}";
-    HttpRes r = HttpPost("/audio/speech", "application/json", body, g_set.tts_cloud);
+    HttpRes r = HttpPost("/audio/speech", "application/json", body, fl_set.tts_cloud);
     CheckHttp(r);
     if (r.ctype.find("json") != std::string::npos || r.body.size() < 100) throw std::runtime_error(explain_error(500, r.body));
     rate = parse_rate(r.ctype, 24000);
@@ -442,7 +442,7 @@ static std::string Speak(const std::string& text, int& rate) {  // облачн�
 }
 
 // ------------------------------------------------------------------ звук: воспроизведение и локальный голос (espeak-ng)
-static std::atomic<pid_t> g_playPid{0};
+static std::atomic<pid_t> fl_playPid{0};
 static bool PlayFile(const std::string& path) {
     std::vector<std::vector<std::string>> players = {
         {"paplay", path}, {"pw-play", path}, {"aplay", "-q", path},
@@ -460,15 +460,15 @@ static bool PlayFile(const std::string& path) {
             _exit(127);
         }
         if (pid < 0) continue;
-        g_playPid = pid;
+        fl_playPid = pid;
         int st = 0;
         while (true) {
             pid_t w = waitpid(pid, &st, WNOHANG);
             if (w == pid || w < 0) break;
-            if (g_stopSpeak || g_closing) { kill(pid, SIGTERM); waitpid(pid, &st, 0); g_playPid = 0; return true; }
+            if (fl_stopSpeak || fl_closing) { kill(pid, SIGTERM); waitpid(pid, &st, 0); fl_playPid = 0; return true; }
             SleepMs(40);
         }
-        g_playPid = 0;
+        fl_playPid = 0;
         if (WIFEXITED(st) && WEXITSTATUS(st) == 0) return true;
     }
     throw std::runtime_error("Не найден проигрыватель звука. Установите pulseaudio-utils или alsa-utils.");
@@ -484,29 +484,29 @@ static std::string SynthLocal(const std::string& text) {
     if (eng.empty()) throw std::runtime_error("Для озвучки установите espeak-ng (sudo apt install espeak-ng) или укажите FLEY_TTS_API_KEY.");
     std::string tf = TmpName(".txt"), wf = TmpName(".wav");
     WriteFileS(tf, text);
-    std::string voice = !g_set.win_voice.empty() ? g_set.win_voice : (has_cyrillic(text) ? "ru+m3" : "en-us+m3");
-    int speed = std::max(80, std::min(400, (int)(165 * g_set.win_rate)));
-    int pitch = std::max(0, std::min(99, (int)(46 * g_set.win_pitch)));
+    std::string voice = !fl_set.win_voice.empty() ? fl_set.win_voice : (has_cyrillic(text) ? "ru+m3" : "en-us+m3");
+    int speed = std::max(80, std::min(400, (int)(165 * fl_set.win_rate)));
+    int pitch = std::max(0, std::min(99, (int)(46 * fl_set.win_pitch)));
     std::string cmd = eng + " -v " + Q(voice) + " -s " + std::to_string(speed) + " -p " + std::to_string(pitch) + " -w " + Q(wf) + " -f " + Q(tf) + " >/dev/null 2>&1";
     int rc = system(cmd.c_str());
     unlink(tf.c_str());
     std::string wav = ReadFileS(wf);
     if (rc != 0 || wav.size() < 100) { unlink(wf.c_str()); throw std::runtime_error("espeak-ng не смог озвучить текст."); }
-    if (g_set.fx_mode > 0 && wav_apply_fx(wav, g_set.fx_mode)) WriteFileS(wf, wav);
+    if (fl_set.fx_mode > 0 && wav_apply_fx(wav, fl_set.fx_mode)) WriteFileS(wf, wav);
     return wf;
 }
 static void SpeakAnswer(const std::string& answer) {
-    g_stopSpeak = 0;
-    if (!g_set.windows_tts) {
+    fl_stopSpeak = 0;
+    if (!fl_set.windows_tts) {
         try {
             int rate = 24000;
             std::string pcm = Speak(answer, rate);
-            g_state = SPEAKING;
+            fl_state = SPEAKING;
             SetStatus("Говорю…");
             PlayPcm(pcm, rate);
             return;
         } catch (const std::exception& e) {
-            if (!g_set.tts_cloud) throw;
+            if (!fl_set.tts_cloud) throw;
             LogLine(std::string("tts-cloud: ") + e.what() + " -> локальный голос");
         }
     }
@@ -514,7 +514,7 @@ static void SpeakAnswer(const std::string& answer) {
     if (parts.empty()) return;
     std::string cur = SynthLocal(parts[0]);
     for (size_t i = 0; i < parts.size() && !cur.empty(); ++i) {
-        g_state = SPEAKING;
+        fl_state = SPEAKING;
         SetStatus("Говорю… (нажмите на ядро, чтобы прервать)");
         std::future<std::string> nxt;
         if (i + 1 < parts.size()) {
@@ -524,24 +524,24 @@ static void SpeakAnswer(const std::string& answer) {
         try { PlayFile(cur); } catch (...) { unlink(cur.c_str()); if (nxt.valid()) nxt.wait(); throw; }
         unlink(cur.c_str());
         std::string next = nxt.valid() ? nxt.get() : std::string();
-        if (g_stopSpeak) { if (!next.empty()) unlink(next.c_str()); break; }
+        if (fl_stopSpeak) { if (!next.empty()) unlink(next.c_str()); break; }
         cur = next;
     }
 }
 
 // ------------------------------------------------------------------ микрофон (arecord / parec / pw-record)
-static int g_micFd = -1;
-static std::atomic<pid_t> g_micPid{0};
-static double g_noiseFloor = 150.0, g_micGain = 0.0;
+static int fl_micFd = -1;
+static std::atomic<pid_t> fl_micPid{0};
+static double fl_noiseFloor = 150.0, fl_micGain = 0.0;
 static void CloseMic() {
-    if (g_micFd >= 0) { close(g_micFd); g_micFd = -1; }
-    pid_t p = g_micPid.exchange(0);
+    if (fl_micFd >= 0) { close(fl_micFd); fl_micFd = -1; }
+    pid_t p = fl_micPid.exchange(0);
     if (p > 0) { kill(p, SIGTERM); int st; waitpid(p, &st, 0); }
 }
-static void KillMicNow() { pid_t p = g_micPid; if (p > 0) kill(p, SIGTERM); }
+static void KillMicNow() { pid_t p = fl_micPid; if (p > 0) kill(p, SIGTERM); }
 static void OpenMic() {
     std::vector<std::string> a;
-    const std::string& dev = g_set.mic_device;
+    const std::string& dev = fl_set.mic_device;
     if (HaveCmd("arecord")) {
         a = {"arecord", "-q", "-t", "raw", "-f", "S16_LE", "-r", "16000", "-c", "1"};
         if (!dev.empty()) { a.push_back("-D"); a.push_back(dev); }
@@ -571,14 +571,14 @@ static void OpenMic() {
     }
     close(fds[1]);
     if (pid < 0) { close(fds[0]); throw std::runtime_error("Не удалось запустить запись с микрофона."); }
-    g_micFd = fds[0];
-    g_micPid = pid;
+    fl_micFd = fds[0];
+    fl_micPid = pid;
 }
 static bool ReadBlock(short* buf, size_t n) {
     size_t need = n * 2, got = 0;
     char* p = (char*)buf;
     while (got < need) {
-        ssize_t r = read(g_micFd, p + got, need - got);
+        ssize_t r = read(fl_micFd, p + got, need - got);
         if (r < 0 && errno == EINTR) continue;
         if (r <= 0) return false;
         got += (size_t)r;
@@ -586,35 +586,35 @@ static bool ReadBlock(short* buf, size_t n) {
     return true;
 }
 static bool ListenUtterance(std::string& wavOut) {
-    if (g_micFd < 0) OpenMic();
-    Endpointer ep(g_set.silence, g_set.threshold, g_noiseFloor);
-    if (g_micGain <= 0) g_micGain = g_set.mic_gain;
+    if (fl_micFd < 0) OpenMic();
+    Endpointer ep(fl_set.silence, fl_set.threshold, fl_noiseFloor);
+    if (fl_micGain <= 0) fl_micGain = fl_set.mic_gain;
     short buf[800];  // 50 мс при 16 кГц
-    g_state = LISTENING;
+    fl_state = LISTENING;
     SetStatus("Слушаю…");
     bool wasSpeech = false;
-    while (!g_closing && g_online && !g_reloadReq && !g_keyErr) {
+    while (!fl_closing && fl_online && !fl_reloadReq && !fl_keyErr) {
         if (!ReadBlock(buf, 800)) {
             CloseMic();
             throw std::runtime_error("Не удалось прочитать микрофон. Проверьте, что он подключён и не занят (команда: arecord -l).");
         }
-        pcm_gain(buf, 800, g_micGain);
-        g_level1000 = (int)std::min(1000.0, rms16(buf, 800) / 12.0);
+        pcm_gain(buf, 800, fl_micGain);
+        fl_level1000 = (int)std::min(1000.0, rms16(buf, 800) / 12.0);
         bool done = ep.feed(buf, 800);
-        g_noiseFloor = ep.floor();
+        fl_noiseFloor = ep.floor();
         if (ep.in_speech() != wasSpeech) { wasSpeech = ep.in_speech(); SetStatus(wasSpeech ? "Слышу вас…" : "Слушаю…"); }
         if (done) {
             std::vector<short> pcm = ep.take();
-            g_level1000 = 0;
-            g_micGain = agc_next(g_micGain, rms16(pcm.data(), pcm.size()), g_set.mic_gain, 12.0);
-            if (g_set.denoise) pcm_denoise(pcm);
+            fl_level1000 = 0;
+            fl_micGain = agc_next(fl_micGain, rms16(pcm.data(), pcm.size()), fl_set.mic_gain, 12.0);
+            if (fl_set.denoise) pcm_denoise(pcm);
             pcm_enhance(pcm, 16000);
             wavOut = make_wav(std::string((const char*)pcm.data(), pcm.size() * 2), 16000, 1);
             return true;
         }
     }
     CloseMic();
-    g_level1000 = 0;
+    fl_level1000 = 0;
     return false;
 }
 
@@ -748,7 +748,7 @@ static ActResult ActYouTube(const std::string& query, bool play) {
             if (p != std::string::npos && ValidVideoId(page.substr(p + 26, 11))) id = page.substr(p + 26, 11);
         }
         if (!id.empty() && ShellOpen("https://www.youtube.com/watch?v=" + id + "&autoplay=1")) {
-            g_ensurePlay = 1;
+            fl_ensurePlay = 1;
             return Ok("Включено видео по запросу: " + trim(query));
         }
     }
@@ -768,7 +768,7 @@ static bool AudioPlaying() {
 }
 static void EnsurePlaying() {
     long long t0 = NowMs();
-    while (NowMs() - t0 < 7000 && !g_closing) { if (AudioPlaying()) return; SleepMs(700); }
+    while (NowMs() - t0 < 7000 && !fl_closing) { if (AudioPlaying()) return; SleepMs(700); }
     if (HaveCmd("playerctl")) RunCapture("playerctl play", 4);
     else if (HaveCmd("xdotool")) RunCapture("xdotool key k", 4);
 }
@@ -930,21 +930,21 @@ static ActResult ActRemember(const Action& a) {
     for (char& c : f) if (c == '\n' || c == '\r') c = ' ';
     f = utf8_truncate(f, 300);
     if (f.empty()) return Fail("Пустой факт.");
-    for (auto& x : g_facts) if (x == f) return Ok("Уже помню.");
-    g_facts.push_back(f);
-    if (g_facts.size() > 300) g_facts.erase(g_facts.begin());
+    for (auto& x : fl_facts) if (x == f) return Ok("Уже помню.");
+    fl_facts.push_back(f);
+    if (fl_facts.size() > 300) fl_facts.erase(fl_facts.begin());
     SaveMemory();
     return Ok("Запомнил: " + f);
 }
 static ActResult ActForget(const Action& a) {
     std::string needle = lower_utf8(trim(a.args.empty() ? "" : a.args[0]));
     if (needle.empty()) return Fail("Не указано, что забыть.");
-    size_t before = g_facts.size();
+    size_t before = fl_facts.size();
     std::vector<std::string> keep;
-    for (auto& x : g_facts) if (lower_utf8(x).find(needle) == std::string::npos) keep.push_back(x);
-    g_facts.swap(keep);
+    for (auto& x : fl_facts) if (lower_utf8(x).find(needle) == std::string::npos) keep.push_back(x);
+    fl_facts.swap(keep);
     SaveMemory();
-    return Ok("Забыто записей: " + std::to_string(before - g_facts.size()));
+    return Ok("Забыто записей: " + std::to_string(before - fl_facts.size()));
 }
 static std::string StripTags(const std::string& s) {
     std::string o;
@@ -1013,8 +1013,8 @@ static ActResult ActType(const std::string& text) {
     return code == 0 ? Ok("Напечатано.") : Fail("Не удалось напечатать текст.");
 }
 static ActResult ActWait(const std::string& ms) { SleepMs(std::max(0, std::min(atoi(ms.c_str()), 10000))); return Ok("Подождал."); }
-static std::mutex g_remMx;
-static std::vector<std::string> g_remDue;
+static std::mutex fl_remMx;
+static std::vector<std::string> fl_remDue;
 static ActResult ActTimer(const Action& a) {
     std::string s = a.args.empty() ? "" : a.args[0];
     for (char& c : s) if (c == ',') c = '.';
@@ -1023,17 +1023,17 @@ static ActResult ActTimer(const Action& a) {
     std::string txt = a.args.size() > 1 && !trim(a.args[1]).empty() ? trim(a.args[1]) : "время вышло";
     std::thread([minutes, txt]() {
         long long end = NowMs() + (long long)(minutes * 60000.0);
-        while (NowMs() < end && !g_closing) SleepMs(200);
-        if (g_closing) return;
-        { std::lock_guard<std::mutex> lk(g_remMx); g_remDue.push_back(txt); }
-        g_remFlag = 1;
+        while (NowMs() < end && !fl_closing) SleepMs(200);
+        if (fl_closing) return;
+        { std::lock_guard<std::mutex> lk(fl_remMx); fl_remDue.push_back(txt); }
+        fl_remFlag = 1;
     }).detach();
     return Ok("Таймер установлен.");
 }
 static ActResult RunAction(const Action& a) {
     const std::string& t = a.type;
     const std::string a0 = a.args.empty() ? "" : a.args[0];
-    if (t == "mic_off") { g_online = 0; return Ok("Микрофон выключен."); }
+    if (t == "mic_off") { fl_online = 0; return Ok("Микрофон выключен."); }
     if (t == "remember") return ActRemember(a);
     if (t == "forget") return ActForget(a);
     if (t == "web_search" || t == "web") return ActWebSearch(a0);
@@ -1078,14 +1078,14 @@ static std::string DescribeAction(const Action& a) {
 
 // ------------------------------------------------------------------ обработка одного высказывания
 static void ProcessUtterance(const std::string& wav) {
-    g_state = THINKING;
-    g_taint = 0;
+    fl_state = THINKING;
+    fl_taint = 0;
     SetStatus("Распознаю…");
     std::string text = Transcribe(wav);
     if (is_noise_transcript(text)) return;
     static long long activeUntil = 0;
-    if (!g_set.wake.empty()) {
-        if (!has_wake_word(text, g_set.wake) && NowMs() > activeUntil) { SetStatus("Жду обращения: «" + g_set.wake + "»"); return; }
+    if (!fl_set.wake.empty()) {
+        if (!has_wake_word(text, fl_set.wake) && NowMs() > activeUntil) { SetStatus("Жду обращения: «" + fl_set.wake + "»"); return; }
         activeUntil = NowMs() + 25000;
     }
     PostLog(0, text);
@@ -1094,7 +1094,7 @@ static void ProcessUtterance(const std::string& wav) {
     std::string answer;
     bool handled = false;
     Action la;
-    if (g_set.pc && local_intent(text, la)) {  // частые команды выполняются мгновенно, без обращения к ИИ
+    if (fl_set.pc && local_intent(text, la)) {  // частые команды выполняются мгновенно, без обращения к ИИ
         SetStatus("Выполняю…");
         PostLog(2, DescribeAction(la));
         ActResult r;
@@ -1102,8 +1102,8 @@ static void ProcessUtterance(const std::string& wav) {
         LogLine("local " + DescribeAction(la) + " -> " + (r.ok ? "ok" : "fail") + ": " + utf8_truncate(r.msg, 300));
         if (r.ok) {
             answer = local_ack(la);
-            g_hist.push_back({"user", text});
-            g_hist.push_back({"assistant", answer});
+            fl_hist.push_back({"user", text});
+            fl_hist.push_back({"assistant", answer});
             SaveHistory();
             handled = true;
         }
@@ -1111,7 +1111,7 @@ static void ProcessUtterance(const std::string& wav) {
     if (!handled) {
         SetStatus("Думаю…");
         answer = Chat(text, acts);
-        if (g_set.pc) {
+        if (fl_set.pc) {
             for (int round = 0; round < 5 && !acts.empty(); ++round) {
                 SetStatus("Выполняю…");
                 std::string feedback, failures;
@@ -1120,7 +1120,7 @@ static void ProcessUtterance(const std::string& wav) {
                     PostLog(2, DescribeAction(a));
                     ActResult r;
                     try { r = RunAction(a); } catch (const std::exception& e) { r = Fail(std::string("Ошибка выполнения: ") + e.what()); }
-                    if (a.type == "read_file" || a.type == "web_search" || a.type == "web") g_taint = 1;
+                    if (a.type == "read_file" || a.type == "web_search" || a.type == "web") fl_taint = 1;
                     LogLine("action " + DescribeAction(a) + " -> " + (r.ok ? "ok" : "fail") + ": " + utf8_truncate(r.msg, 300));
                     if (!r.ok) failures += (failures.empty() ? "" : " ") + r.msg;
                     if (r.feedback) { need = true; feedback += "[" + a.type + "] " + (r.ok ? "" : "ОШИБКА: ") + r.msg + "\n"; }
@@ -1149,9 +1149,9 @@ static void ProcessUtterance(const std::string& wav) {
             SleepMs(2500);
         }
     }
-    if (g_ensurePlay) {
-        g_ensurePlay = 0;
-        g_state = THINKING;
+    if (fl_ensurePlay) {
+        fl_ensurePlay = 0;
+        fl_state = THINKING;
         SetStatus("Проверяю воспроизведение…");
         EnsurePlaying();
     }
@@ -1163,35 +1163,35 @@ static void ProcessUtterance(const std::string& wav) {
 // ------------------------------------------------------------------ постоянный диалог: слушаю -> отвечаю -> слушаю
 static void SessionThread() {
     bool keyShown = false;
-    while (!g_closing) {
-        if (g_clearReq) { g_clearReq = 0; g_hist.clear(); SaveHistory(); }
-        if (!g_online) {
-            g_state = IDLE;
+    while (!fl_closing) {
+        if (fl_clearReq) { fl_clearReq = 0; fl_hist.clear(); SaveHistory(); }
+        if (!fl_online) {
+            fl_state = IDLE;
             SetStatus("Микрофон выключен. Нажмите на ядро или Пробел.");
             SleepMs(150);
             continue;
         }
-        if (g_keyErr) { g_state = IDLE; SleepMs(200); continue; }
+        if (fl_keyErr) { fl_state = IDLE; SleepMs(200); continue; }
         LoadSettings();
-        g_reloadReq = 0;
-        if (g_set.key.empty()) {
+        fl_reloadReq = 0;
+        if (fl_set.key.empty()) {
             if (!keyShown) { keyShown = true; NeedKey(); }
-            g_state = IDLE;
+            fl_state = IDLE;
             SleepMs(1000);
             continue;
         }
         keyShown = false;
         try {
-            if (g_remFlag) {
+            if (fl_remFlag) {
                 std::vector<std::string> due;
-                { std::lock_guard<std::mutex> lk(g_remMx); due.swap(g_remDue); g_remFlag = 0; }
+                { std::lock_guard<std::mutex> lk(fl_remMx); due.swap(fl_remDue); fl_remFlag = 0; }
                 for (auto& d : due) { PostLog(1, "Напоминание: " + d); SpeakAnswer("Напоминание: " + d); }
                 continue;
             }
             static bool greeted = false;
             if (!greeted) {
                 greeted = true;
-                if (g_set.greeting) {
+                if (fl_set.greeting) {
                     time_t tt = time(nullptr);
                     int hr = localtime(&tt)->tm_hour;
                     const char* part = hr < 5 ? "Доброй ночи" : hr < 12 ? "Доброе утро" : hr < 18 ? "Добрый день" : "Добрый вечер";
@@ -1203,24 +1203,24 @@ static void SessionThread() {
             }
             std::string wav;
             bool got = ListenUtterance(wav);
-            if (g_closing) break;
+            if (fl_closing) break;
             if (!got) continue;
             ProcessUtterance(wav);
         } catch (const KeyError& e) {
             LogLine(std::string("key error: ") + e.what());
-            g_state = IDLE;
-            g_keyErr = 1;
+            fl_state = IDLE;
+            fl_keyErr = 1;
             SetStatus(e.what(), true);
             PostLog(2, std::string("ПРОБЛЕМА С КЛЮЧОМ. ") + e.what());
-            g_showSet = 1;
+            fl_showSet = 1;
         } catch (const RateLimit& e) {
             LogLine(std::string("rate limit: ") + e.what());
-            g_state = IDLE;
+            fl_state = IDLE;
             if (e.wait > 300) {
-                g_online = 0;
+                fl_online = 0;
                 SetStatus(std::string(e.what()) + " Микрофон выключен.", true);
             } else {
-                for (int i = e.wait; i > 0 && !g_closing && g_online && !g_reloadReq; --i) {
+                for (int i = e.wait; i > 0 && !fl_closing && fl_online && !fl_reloadReq; --i) {
                     SetStatus("Лимит API, продолжу через " + std::to_string(i) + " с…", true);
                     SleepMs(1000);
                 }
@@ -1228,14 +1228,14 @@ static void SessionThread() {
         } catch (const std::exception& e) {
             LogLine(e.what());
             SetStatus(e.what(), true);
-            g_state = IDLE;
+            fl_state = IDLE;
             CloseMic();
-            if (std::string(e.what()).find("микрофон") != std::string::npos) g_online = 0;
-            for (int i = 0; i < 30 && !g_closing; ++i) SleepMs(100);
+            if (std::string(e.what()).find("микрофон") != std::string::npos) fl_online = 0;
+            for (int i = 0; i < 30 && !fl_closing; ++i) SleepMs(100);
         } catch (...) {
             SetStatus("Неизвестная ошибка.", true);
             SleepMs(1500);
         }
     }
-    g_state = IDLE;
+    fl_state = IDLE;
 }

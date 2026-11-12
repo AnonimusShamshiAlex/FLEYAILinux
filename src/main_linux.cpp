@@ -6,9 +6,9 @@
 
 #include "engine.hpp"
 
-static GtkWidget *g_win = nullptr, *g_area = nullptr;
-static double g_t = 0, g_lv = 0, g_cpu = 0, g_ram = 0;
-static bool g_full = false;
+static GtkWidget *fl_win = nullptr, *fl_area = nullptr;
+static double fl_t = 0, fl_lv = 0, fl_cpu = 0, fl_ram = 0;
+static bool fl_full = false;
 
 struct C3 { double r, g, b; };
 static const C3 C_CYAN = {0.12, 0.78, 1.0}, C_ICE = {0.6, 0.92, 1.0}, C_AMBER = {1.0, 0.69, 0.19}, C_RED = {1.0, 0.35, 0.3}, C_DIM = {0.25, 0.4, 0.55};
@@ -65,7 +65,7 @@ static void Ring(cairo_t* cr, double cx, double cy, double r, C3 c, double a, do
 
 static void DrawOrb(cairo_t* cr, const Geo& g, int st, bool on) {
     C3 c = StateColor(st, on);
-    double lv = g_lv, R = g.R * (1.0 + 0.10 * lv);
+    double lv = fl_lv, R = g.R * (1.0 + 0.10 * lv);
     // свечение
     cairo_pattern_t* gl = cairo_pattern_create_radial(g.cx, g.cy, R * 0.3, g.cx, g.cy, R * 2.3);
     cairo_pattern_add_color_stop_rgba(gl, 0, c.r, c.g, c.b, 0.28 + 0.2 * lv);
@@ -75,18 +75,18 @@ static void DrawOrb(cairo_t* cr, const Geo& g, int st, bool on) {
     cairo_fill(cr);
     cairo_pattern_destroy(gl);
     // кольца
-    Ring(cr, g.cx, g.cy, R * 1.55, c, 0.35, 1.5 * g.s, 14 * g.s, g_t * 30);
-    Ring(cr, g.cx, g.cy, R * 1.32, c, 0.55, 2.0 * g.s, 40 * g.s, -g_t * 45);
+    Ring(cr, g.cx, g.cy, R * 1.55, c, 0.35, 1.5 * g.s, 14 * g.s, fl_t * 30);
+    Ring(cr, g.cx, g.cy, R * 1.32, c, 0.55, 2.0 * g.s, 40 * g.s, -fl_t * 45);
     Ring(cr, g.cx, g.cy, R * 1.12, c, 0.9, 1.5 * g.s, 0, 0);
     // лучи вокруг ядра: реагируют на голос, при раздумьях - вращающийся «радар»
     const int N = 72;
     cairo_save(cr);
     cairo_set_line_width(cr, 2.2 * g.s);
     for (int i = 0; i < N; ++i) {
-        double a = i * 2 * M_PI / N + g_t * 0.12, amp;
-        if (st == THINKING) { double k = std::max(0.0, std::cos(a * 1.0 - g_t * 3.2)); amp = 0.12 + 0.88 * std::pow(k, 6); }
-        else if (st == SPEAKING) amp = 0.2 + 0.6 * std::fabs(std::sin(g_t * 5 + i * 0.7) * std::cos(g_t * 1.7 + i * 0.25));
-        else amp = 0.1 + lv * 0.9 * (0.4 + 0.6 * std::fabs(std::sin(g_t * 4 + i * 0.9)));
+        double a = i * 2 * M_PI / N + fl_t * 0.12, amp;
+        if (st == THINKING) { double k = std::max(0.0, std::cos(a * 1.0 - fl_t * 3.2)); amp = 0.12 + 0.88 * std::pow(k, 6); }
+        else if (st == SPEAKING) amp = 0.2 + 0.6 * std::fabs(std::sin(fl_t * 5 + i * 0.7) * std::cos(fl_t * 1.7 + i * 0.25));
+        else amp = 0.1 + lv * 0.9 * (0.4 + 0.6 * std::fabs(std::sin(fl_t * 4 + i * 0.9)));
         double r0 = R * 1.18, r1 = r0 + R * (0.05 + 0.32 * amp);
         cairo_set_source_rgba(cr, c.r, c.g, c.b, 0.35 + 0.6 * amp);
         cairo_move_to(cr, g.cx + std::cos(a) * r0, g.cy + std::sin(a) * r0);
@@ -109,9 +109,9 @@ static void DrawOrb(cairo_t* cr, const Geo& g, int st, bool on) {
 static void DrawLog(cairo_t* cr, double x, double top, double w, double bottom) {
     std::vector<LogEntry> es;
     {
-        std::lock_guard<std::mutex> lk(g_mx);
-        size_t from = g_log.size() > 40 ? g_log.size() - 40 : 0;
-        es.assign(g_log.begin() + (long)from, g_log.end());
+        std::lock_guard<std::mutex> lk(fl_mx);
+        size_t from = fl_logv.size() > 40 ? fl_logv.size() - 40 : 0;
+        es.assign(fl_logv.begin() + (long)from, fl_logv.end());
     }
     cairo_set_source_rgba(cr, 0.02, 0.08, 0.14, 0.55);
     cairo_rectangle(cr, x, top, w, bottom - top);
@@ -138,8 +138,8 @@ static void DrawLog(cairo_t* cr, double x, double top, double w, double bottom) 
 
 static gboolean OnDraw(GtkWidget* w, cairo_t* cr, gpointer) {
     int W = gtk_widget_get_allocated_width(w), H = gtk_widget_get_allocated_height(w);
-    int st = g_state;
-    bool on = g_online;
+    int st = fl_state;
+    bool on = fl_online;
     Geo g = Geometry(W, H);
     // фон
     cairo_pattern_t* bg = cairo_pattern_create_radial(W / 2.0, H * 0.36, 10, W / 2.0, H * 0.36, std::max(W, H) * 0.85);
@@ -157,14 +157,14 @@ static gboolean OnDraw(GtkWidget* w, cairo_t* cr, gpointer) {
     // шапка
     Text(cr, "F L E Y   A I", 24, 16, 0, 22 * std::max(0.8, g.s), C_CYAN, 1, 0, true);
     std::string model;
-    { std::lock_guard<std::mutex> lk(g_mx); model = g_model; }
+    { std::lock_guard<std::mutex> lk(fl_mx); model = fl_model; }
     Text(cr, "FLEY Industries  ·  " + model, 24, 16 + 28 * std::max(0.8, g.s), 0, 12, C_CYAN, 0.55, 0, false, true);
     time_t t = time(nullptr);
     char clk[16];
     strftime(clk, sizeof clk, "%H:%M:%S", localtime(&t));
     // статистика
     char buf[96];
-    snprintf(buf, sizeof buf, "CPU %3.0f%%   RAM %3.0f%%   ПАМЯТЬ %d", g_cpu, g_ram, (int)g_factCount);
+    snprintf(buf, sizeof buf, "CPU %3.0f%%   RAM %3.0f%%   ПАМЯТЬ %d", fl_cpu, fl_ram, (int)fl_factCount);
     Text(cr, buf, 24, 16 + 50 * std::max(0.8, g.s), 0, 12, C_ICE, 0.7, 0, false, true);
 
     DrawOrb(cr, g, st, on);
@@ -172,7 +172,7 @@ static gboolean OnDraw(GtkWidget* w, cairo_t* cr, gpointer) {
     // статус под ядром
     std::string status;
     bool err;
-    { std::lock_guard<std::mutex> lk(g_mx); status = g_status; err = g_statusErr; }
+    { std::lock_guard<std::mutex> lk(fl_mx); status = fl_status; err = fl_statusErr; }
     double sy = g.cy + g.R * 1.95;
     int sh = Text(cr, status, W * 0.15, sy, W * 0.7, 16 * std::max(0.85, g.s), err ? C_RED : StateColor(st, on), 0.95, 1);
 
@@ -185,8 +185,8 @@ static gboolean OnDraw(GtkWidget* w, cairo_t* cr, gpointer) {
 }
 
 static void OnOrbClick() {
-    if (g_state == SPEAKING) { g_stopSpeak = 1; return; }
-    g_online = g_online ? 0 : 1;
+    if (fl_state == SPEAKING) { fl_stopSpeak = 1; return; }
+    fl_online = fl_online ? 0 : 1;
 }
 static gboolean OnPress(GtkWidget* w, GdkEventButton* ev, gpointer) {
     if (ev->button != 1) return FALSE;
@@ -197,20 +197,20 @@ static gboolean OnPress(GtkWidget* w, GdkEventButton* ev, gpointer) {
 }
 
 static void ToggleFull() {
-    g_full = !g_full;
-    if (g_full) gtk_window_fullscreen(GTK_WINDOW(g_win)); else gtk_window_unfullscreen(GTK_WINDOW(g_win));
+    fl_full = !fl_full;
+    if (fl_full) gtk_window_fullscreen(GTK_WINDOW(fl_win)); else gtk_window_unfullscreen(GTK_WINDOW(fl_win));
 }
 static void QuitApp() {
-    g_closing = 1;
+    fl_closing = 1;
     KillMicNow();
-    pid_t p = g_playPid;
+    pid_t p = fl_playPid;
     if (p > 0) kill(p, SIGTERM);
     gtk_main_quit();
 }
 static gboolean OnKey(GtkWidget*, GdkEventKey* ev, gpointer) {
     if (ev->keyval == GDK_KEY_space) { OnOrbClick(); return TRUE; }
     if (ev->keyval == GDK_KEY_F11) { ToggleFull(); return TRUE; }
-    if (ev->keyval == GDK_KEY_Escape && g_full) { ToggleFull(); return TRUE; }
+    if (ev->keyval == GDK_KEY_Escape && fl_full) { ToggleFull(); return TRUE; }
     if ((ev->state & GDK_CONTROL_MASK) && (ev->keyval == GDK_KEY_q || ev->keyval == GDK_KEY_Q)) { QuitApp(); return TRUE; }
     return FALSE;
 }
@@ -220,7 +220,7 @@ static void OpenSettings() {
     static bool open = false;
     if (open) return;
     open = true;
-    GtkWidget* d = gtk_dialog_new_with_buttons("Настройки FLEY AI", GTK_WINDOW(g_win), GTK_DIALOG_MODAL, "Отмена", GTK_RESPONSE_CANCEL, "Сохранить",
+    GtkWidget* d = gtk_dialog_new_with_buttons("Настройки FLEY AI", GTK_WINDOW(fl_win), GTK_DIALOG_MODAL, "Отмена", GTK_RESPONSE_CANCEL, "Сохранить",
                                                GTK_RESPONSE_OK, nullptr);
     GtkWidget* grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
@@ -237,15 +237,15 @@ static void OpenSettings() {
         gtk_grid_attach(GTK_GRID(grid), e, 1, r, 1, 1);
         return e;
     };
-    std::string env = ReadFileS(g_envPath);
+    std::string env = ReadFileS(fl_envPath);
     auto cur = parse_env(env);
     auto cv = [&](const char* k) { auto it = cur.find(k); return it == cur.end() ? std::string() : it->second; };
-    GtkWidget* eKey = row(0, "API-ключ (Groq / OpenRouter / OpenAI)", g_set.key, true);
+    GtkWidget* eKey = row(0, "API-ключ (Groq / OpenRouter / OpenAI)", fl_set.key, true);
     GtkWidget* eCall = row(1, "Как к вам обращаться", cv("FLEY_CALL_ME"), false);
     GtkWidget* eWake = row(2, "Слово-активатор (пусто = на всё)", cv("FLEY_WAKE"), false);
     GtkWidget* eSil = row(3, "Пауза до конца фразы, секунд", cv("FLEY_SILENCE_SECONDS"), false);
     GtkWidget* chk = gtk_check_button_new_with_label("Спрашивать подтверждение для опасных действий");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(chk), g_set.confirm);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(chk), fl_set.confirm);
     gtk_grid_attach(GTK_GRID(grid), chk, 1, 4, 1, 1);
     GtkWidget* hint = gtk_label_new("Бесплатный ключ Groq: console.groq.com/keys. Остальные настройки - в файле .env");
     gtk_grid_attach(GTK_GRID(grid), hint, 0, 5, 2, 1);
@@ -264,9 +264,9 @@ static void OpenSettings() {
         std::string sil = trim(gtk_entry_get_text(GTK_ENTRY(eSil)));
         if (!sil.empty()) env = set_env_value(env, "FLEY_SILENCE_SECONDS", sil, true);
         env = set_env_value(env, "FLEY_CONFIRM", gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(chk)) ? "1" : "0", true);
-        WriteFileS(g_envPath, env);
-        g_keyErr = 0;
-        g_reloadReq = 1;
+        WriteFileS(fl_envPath, env);
+        fl_keyErr = 0;
+        fl_reloadReq = 1;
         SetStatus("Настройки сохранены.");
     }
     gtk_widget_destroy(d);
@@ -277,7 +277,7 @@ static void OpenSettings() {
 struct ConfirmReq { std::string what; bool res = false, done = false; std::mutex m; std::condition_variable cv; };
 static gboolean ConfirmIdle(gpointer p) {
     ConfirmReq* r = (ConfirmReq*)p;
-    GtkWidget* d = gtk_message_dialog_new(GTK_WINDOW(g_win), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO, "%s", r->what.c_str());
+    GtkWidget* d = gtk_message_dialog_new(GTK_WINDOW(fl_win), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO, "%s", r->what.c_str());
     bool yes = gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_YES;
     gtk_widget_destroy(d);
     std::lock_guard<std::mutex> lk(r->m);
@@ -296,38 +296,38 @@ static bool ConfirmGui(const std::string& what) {
 }
 
 // ------------------------------------------------------------------ таймер интерфейса
-static unsigned long long g_cpuTot = 0, g_cpuIdle = 0;
+static unsigned long long fl_cpuTot = 0, fl_cpuIdle = 0;
 static void UpdateStats() {
     std::string s = ReadFileS("/proc/stat");
     unsigned long long u = 0, n = 0, sy = 0, id = 0, io = 0, irq = 0, sirq = 0, st = 0;
     if (sscanf(s.c_str(), "cpu %llu %llu %llu %llu %llu %llu %llu %llu", &u, &n, &sy, &id, &io, &irq, &sirq, &st) >= 4) {
         unsigned long long tot = u + n + sy + id + io + irq + sirq + st, idl = id + io;
-        if (g_cpuTot && tot > g_cpuTot) g_cpu = 100.0 * (1.0 - (double)(idl - g_cpuIdle) / (double)(tot - g_cpuTot));
-        g_cpuTot = tot;
-        g_cpuIdle = idl;
+        if (fl_cpuTot && tot > fl_cpuTot) fl_cpu = 100.0 * (1.0 - (double)(idl - fl_cpuIdle) / (double)(tot - fl_cpuTot));
+        fl_cpuTot = tot;
+        fl_cpuIdle = idl;
     }
     std::string mi = ReadFileS("/proc/meminfo");
     auto kb = [&](const char* k) { size_t p = mi.find(k); return p == std::string::npos ? 0.0 : atof(mi.c_str() + p + strlen(k)); };
     double tot = kb("MemTotal:"), av = kb("MemAvailable:");
-    if (tot > 0) g_ram = 100.0 * (tot - av) / tot;
+    if (tot > 0) fl_ram = 100.0 * (tot - av) / tot;
 }
 static gboolean OnTimer(gpointer) {
     static int tick = 0;
-    g_t += 0.033;
-    int st = g_state;
-    double target = st == LISTENING ? g_level1000 / 1000.0 : 0.0;
-    g_lv += (target - g_lv) * 0.25;
+    fl_t += 0.033;
+    int st = fl_state;
+    double target = st == LISTENING ? fl_level1000 / 1000.0 : 0.0;
+    fl_lv += (target - fl_lv) * 0.25;
     if (++tick % 30 == 1) UpdateStats();
-    if (g_showSet) { g_showSet = 0; OpenSettings(); }
-    gtk_widget_queue_draw(g_area);
+    if (fl_showSet) { fl_showSet = 0; OpenSettings(); }
+    gtk_widget_queue_draw(fl_area);
     return TRUE;
 }
 
 static void OnBtnMic(GtkButton*, gpointer) { OnOrbClick(); }
 static void OnBtnSet(GtkButton*, gpointer) { OpenSettings(); }
 static void OnBtnClear(GtkButton*, gpointer) {
-    { std::lock_guard<std::mutex> lk(g_mx); g_log.clear(); }
-    g_clearReq = 1;
+    { std::lock_guard<std::mutex> lk(fl_mx); fl_logv.clear(); }
+    fl_clearReq = 1;
 }
 static void OnBtnFull(GtkButton*, gpointer) { ToggleFull(); }
 
@@ -340,17 +340,17 @@ int main(int argc, char** argv) {
     LoadHistory();
     gtk_init(&argc, &argv);
 
-    g_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(g_win), "FLEY AI");
-    gtk_window_set_default_size(GTK_WINDOW(g_win), 1100, 720);
-    for (std::string p : {g_dir + "/fley.png", std::string("assets/fley.png")}) {
+    fl_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(fl_win), "FLEY AI");
+    gtk_window_set_default_size(GTK_WINDOW(fl_win), 1100, 720);
+    for (std::string p : {fl_dir + "/fley.png", std::string("assets/fley.png")}) {
         std::error_code ec;
-        if (fs::exists(p, ec)) { gtk_window_set_icon_from_file(GTK_WINDOW(g_win), p.c_str(), nullptr); break; }
+        if (fs::exists(p, ec)) { gtk_window_set_icon_from_file(GTK_WINDOW(fl_win), p.c_str(), nullptr); break; }
     }
-    g_area = gtk_drawing_area_new();
-    gtk_widget_add_events(g_area, GDK_BUTTON_PRESS_MASK);
-    g_signal_connect(g_area, "draw", G_CALLBACK(OnDraw), nullptr);
-    g_signal_connect(g_area, "button-press-event", G_CALLBACK(OnPress), nullptr);
+    fl_area = gtk_drawing_area_new();
+    gtk_widget_add_events(fl_area, GDK_BUTTON_PRESS_MASK);
+    g_signal_connect(fl_area, "draw", G_CALLBACK(OnDraw), nullptr);
+    g_signal_connect(fl_area, "button-press-event", G_CALLBACK(OnPress), nullptr);
 
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     gtk_widget_set_halign(box, GTK_ALIGN_END);
@@ -366,9 +366,9 @@ int main(int argc, char** argv) {
         gtk_box_pack_start(GTK_BOX(box), w, FALSE, FALSE, 0);
     }
     GtkWidget* ov = gtk_overlay_new();
-    gtk_container_add(GTK_CONTAINER(ov), g_area);
+    gtk_container_add(GTK_CONTAINER(ov), fl_area);
     gtk_overlay_add_overlay(GTK_OVERLAY(ov), box);
-    gtk_container_add(GTK_CONTAINER(g_win), ov);
+    gtk_container_add(GTK_CONTAINER(fl_win), ov);
 
     GtkCssProvider* css = gtk_css_provider_new();
     gtk_css_provider_load_from_data(css,
@@ -378,21 +378,21 @@ int main(int argc, char** argv) {
         "entry { background: #0b1b2c; color: #e6fbff; border: 1px solid #1ec8ff; }", -1, nullptr);
     gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-    g_signal_connect(g_win, "destroy", G_CALLBACK(+[](GtkWidget*, gpointer) { QuitApp(); }), nullptr);
-    g_signal_connect(g_win, "key-press-event", G_CALLBACK(OnKey), nullptr);
-    g_confirmFn = ConfirmGui;
+    g_signal_connect(fl_win, "destroy", G_CALLBACK(+[](GtkWidget*, gpointer) { QuitApp(); }), nullptr);
+    g_signal_connect(fl_win, "key-press-event", G_CALLBACK(OnKey), nullptr);
+    fl_confirmFn = ConfirmGui;
 
-    if (g_set.window_mode == "mini") {
-        gtk_window_resize(GTK_WINDOW(g_win), 420, 360);
-        gtk_window_set_keep_above(GTK_WINDOW(g_win), TRUE);
+    if (fl_set.window_mode == "mini") {
+        gtk_window_resize(GTK_WINDOW(fl_win), 420, 360);
+        gtk_window_set_keep_above(GTK_WINDOW(fl_win), TRUE);
     }
-    gtk_widget_show_all(g_win);
-    if (g_set.window_mode == "full") { g_full = true; gtk_window_fullscreen(GTK_WINDOW(g_win)); }
+    gtk_widget_show_all(fl_win);
+    if (fl_set.window_mode == "full") { fl_full = true; gtk_window_fullscreen(GTK_WINDOW(fl_win)); }
 
     std::thread(SessionThread).detach();
     g_timeout_add(33, OnTimer, nullptr);
     gtk_main();
-    g_closing = 1;
+    fl_closing = 1;
     KillMicNow();
     _exit(0);  // рабочие потоки не ждём
 }
