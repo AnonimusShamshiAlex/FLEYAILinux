@@ -22,6 +22,14 @@ done
 grep -c "g_log" src/engine.hpp src/main_linux.cpp
 bash build.sh --no-deps
 
+cd /home/kali/Desktop/FLEYAILinux
+bash build.sh --no-deps
+
+
+sudo -u kali XDG_RUNTIME_DIR=/run/user/1000 pactl set-source-mute @DEFAULT_SOURCE@ 0
+sudo -u kali XDG_RUNTIME_DIR=/run/user/1000 pactl set-source-volume @DEFAULT_SOURCE@ 100%
+
+
 ```
 
 Скрипт сам: поставит пакеты (apt / dnf / pacman / zypper), соберёт программу, создаст ярлык «FLEY AI» и запустит окно.
