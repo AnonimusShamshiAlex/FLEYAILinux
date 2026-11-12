@@ -113,20 +113,3 @@ Use code with caution.
 После проверки тестовый файл можно удалить командой rm test.wav.
 Если на каком-то шаге терминал выдаст ошибку — напишите, какую именно, и мы разберемся!
 
-┌──(root㉿kali)-[/home/kali/Desktop/FLEYAILinux/FLEY_AI_LINUX]
-└─# arecord -l
-
-**** List of CAPTURE Hardware Devices ****
-card 0: I82801AAICH [Intel 82801AA-ICH], device 0: Intel ICH [Intel 82801AA-ICH]
-  Subdevices: 0/1
-  Subdevice #0: subdevice #0
-card 0: I82801AAICH [Intel 82801AA-ICH], device 1: Intel ICH - MIC ADC [Intel 82801AA-ICH - MIC ADC]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-
-
-Часто микрофон в Kali по умолчанию выключен (находится в режиме Mute). Включите его и поставьте громкость на 100%:
-bash
-pactl set-source-mute @DEFAULT_SOURCE@ 0
-pactl set-source-volume @DEFAULT_SOURCE@ 100%
-Use code with caution.
