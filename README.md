@@ -3,6 +3,10 @@
 Тот же FLEY AI, что и на Windows (HUD-окно, постоянное прослушивание, управление ПК голосом, память), но под Linux.
 Логика (`src/core.hpp`) общая с Windows-версией, окно переписано на GTK3.
 
+![Image description](1.jpg)
+
+![Image description](2.jpg)
+
 ## Запуск (один скрипт)
 ```bash
 bash bulid.sh
