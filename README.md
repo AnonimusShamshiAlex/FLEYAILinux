@@ -12,6 +12,16 @@ https://fleyaidownload.netlify.app/
 ```bash
 unzip FLEY_AI_LINUX.zip && cd FLEY_AI_LINUX
 bash build.sh
+
+# Если ошибка то вот это 
+
+cd /home/kali/Desktop/FLEYAILinux
+for n in state keyErr remFlag online stopSpeak closing clearReq taint ensurePlay reloadReq showSet level1000 factCount mx status model statusErr logv log set hist dir envPath confirmFn facts playPid micFd micPid noiseFloor micGain remMx remDue win area t lv cpu ram full cpuTot cpuIdle; do
+  sed -i "s/\bg_$n\b/fl_$n/g" src/engine.hpp src/main_linux.cpp
+done
+grep -c "g_log" src/engine.hpp src/main_linux.cpp
+bash build.sh --no-deps
+
 ```
 
 Скрипт сам: поставит пакеты (apt / dnf / pacman / zypper), соберёт программу, создаст ярлык «FLEY AI» и запустит окно.
