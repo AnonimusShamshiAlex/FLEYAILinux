@@ -39,7 +39,7 @@ static std::mutex g_mx;
 static std::string g_status = "Запуск…", g_model;
 static bool g_statusErr = false;
 struct LogEntry { int role; std::string text; };
-static std::vector<LogEntry> g_log;
+static std::vector<LogEntry> g_logv;
 static Settings g_set;
 static std::vector<std::pair<std::string, std::string>> g_hist;
 static std::string g_dir, g_envPath;
@@ -93,8 +93,8 @@ static void SetStatus(const std::string& t, bool err = false) {
 }
 static void PostLog(int role, const std::string& text) {
     std::lock_guard<std::mutex> lk(g_mx);
-    g_log.push_back({role, text});
-    if (g_log.size() > 200) g_log.erase(g_log.begin(), g_log.begin() + 50);
+    g_logv.push_back({role, text});
+    if (g_logv.size() > 200) g_logv.erase(g_logv.begin(), g_logv.begin() + 50);
 }
 static bool HaveCmd(const std::string& c) { return system(("command -v " + Q(c) + " >/dev/null 2>&1").c_str()) == 0; }
 static std::string RunCapture(const std::string& cmd, int timeoutSec, int* code = nullptr) {

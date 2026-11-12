@@ -110,8 +110,8 @@ static void DrawLog(cairo_t* cr, double x, double top, double w, double bottom) 
     std::vector<LogEntry> es;
     {
         std::lock_guard<std::mutex> lk(g_mx);
-        size_t from = g_log.size() > 40 ? g_log.size() - 40 : 0;
-        es.assign(g_log.begin() + (long)from, g_log.end());
+        size_t from = g_logv.size() > 40 ? g_logv.size() - 40 : 0;
+        es.assign(g_logv.begin() + (long)from, g_logv.end());
     }
     cairo_set_source_rgba(cr, 0.02, 0.08, 0.14, 0.55);
     cairo_rectangle(cr, x, top, w, bottom - top);
@@ -378,7 +378,7 @@ static gboolean OnTimer(gpointer) {
 static void OnBtnMic(GtkButton*, gpointer) { OnOrbClick(); }
 static void OnBtnSet(GtkButton*, gpointer) { OpenSettings(); }
 static void OnBtnClear(GtkButton*, gpointer) {
-    { std::lock_guard<std::mutex> lk(g_mx); g_log.clear(); }
+    { std::lock_guard<std::mutex> lk(g_mx); g_logv.clear(); }
     g_clearReq = 1;
 }
 static void OnBtnFull(GtkButton*, gpointer) { ToggleFull(); }
