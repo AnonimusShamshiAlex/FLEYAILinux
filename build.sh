@@ -31,7 +31,7 @@ SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
 # ---------------------------------------------------------------- 1. зависимости
 install_deps() {
   local need=0 c
-  for c in g++ curl arecord espeak-ng xdotool pactl xdg-open; do command -v "$c" >/dev/null 2>&1 || need=1; done
+  for c in g++ curl arecord espeak-ng xdotool pactl xdg-open mpg123 python3; do command -v "$c" >/dev/null 2>&1 || need=1; done
   pkg-config --exists gtk+-3.0 2>/dev/null || need=1
   [ "$need" -eq 0 ] && return 0
 
@@ -41,19 +41,19 @@ install_deps() {
     mgr=apt
     $SUDO apt-get update
     inst=($SUDO apt-get install -y)
-    pk=(g++ pkg-config libgtk-3-dev curl alsa-utils espeak-ng xdotool pulseaudio-utils playerctl xdg-utils xdg-user-dirs libglib2.0-bin libgtk-3-bin)
+    pk=(g++ pkg-config libgtk-3-dev curl alsa-utils espeak-ng xdotool pulseaudio-utils playerctl xdg-utils xdg-user-dirs libglib2.0-bin libgtk-3-bin mpg123 python3 python3-venv python3-pip)
   elif command -v dnf >/dev/null 2>&1; then
     mgr=dnf
     inst=($SUDO dnf install -y)
-    pk=(gcc-c++ pkgconf-pkg-config gtk3-devel curl alsa-utils espeak-ng xdotool pulseaudio-utils playerctl xdg-utils xdg-user-dirs glib2 gtk3)
+    pk=(gcc-c++ pkgconf-pkg-config gtk3-devel curl alsa-utils espeak-ng xdotool pulseaudio-utils playerctl xdg-utils xdg-user-dirs glib2 gtk3 mpg123 python3 python3-pip)
   elif command -v pacman >/dev/null 2>&1; then
     mgr=pacman
     inst=($SUDO pacman -S --needed --noconfirm)
-    pk=(base-devel pkgconf gtk3 curl alsa-utils espeak-ng xdotool libpulse playerctl xdg-utils xdg-user-dirs glib2)
+    pk=(base-devel pkgconf gtk3 curl alsa-utils espeak-ng xdotool libpulse playerctl xdg-utils xdg-user-dirs glib2 mpg123 python python-pip)
   elif command -v zypper >/dev/null 2>&1; then
     mgr=zypper
     inst=($SUDO zypper --non-interactive install)
-    pk=(gcc-c++ pkg-config gtk3-devel curl alsa-utils espeak-ng xdotool pulseaudio-utils playerctl xdg-utils xdg-user-dirs glib2-tools gtk3-tools)
+    pk=(gcc-c++ pkg-config gtk3-devel curl alsa-utils espeak-ng xdotool pulseaudio-utils playerctl xdg-utils xdg-user-dirs glib2-tools gtk3-tools mpg123 python3 python3-pip)
   else
     echo "Не знаю ваш менеджер пакетов. Поставьте вручную: g++, pkg-config, GTK3 (dev), curl, alsa-utils, espeak-ng, xdotool, pulseaudio-utils, playerctl."
     return 0
@@ -67,6 +67,19 @@ install_deps() {
 command -v g++ >/dev/null 2>&1 || { echo "Не найден g++. Установите компилятор (sudo apt install g++) и запустите снова."; exit 1; }
 pkg-config --exists gtk+-3.0 2>/dev/null || { echo "Не найден GTK3 для разработки (sudo apt install libgtk-3-dev) - запустите снова."; exit 1; }
 
+# ---------------------------------------------------------------- 1б. нейро-голос Edge-TTS (бесплатный, нужен интернет)
+say "Ставлю нейро-голос (Edge-TTS)"
+if command -v python3 >/dev/null 2>&1; then
+  mkdir -p "$PREFIX"
+  if [ ! -x "$PREFIX/venv/bin/edge-tts" ]; then
+    python3 -m venv "$PREFIX/venv" 2>/dev/null && "$PREFIX/venv/bin/pip" install -q --upgrade edge-tts \
+      || echo "(не удалось поставить edge-tts - будет голос-робот espeak-ng; нужны python3-venv и интернет)"
+  else
+    echo "Edge-TTS уже установлен."
+  fi
+fi
+[ "$(id -u)" -eq 0 ] && echo "ВНИМАНИЕ: вы запускаете от root. Звук и микрофон лучше работают от обычного пользователя (не root)."
+
 # ---------------------------------------------------------------- 2. сборка
 say "Собираю FLEY AI"
 mkdir -p build
@@ -79,7 +92,7 @@ mkdir -p "$PREFIX" "$BIN" "$CFG" "$(dirname "$DESK")"
 cp -f "build/$APP" "$PREFIX/$APP"
 cp -f assets/fley.png "$PREFIX/fley.png"
 ln -sf "$PREFIX/$APP" "$BIN/$APP"
-[ -f "$CFG/.env" ] || cp .env.example "$CFG/.env"
+[ -f "$CFG/.env" ] || cp .env.example "$CFG/.env" 2>/dev/null || true
 
 cat > "$DESK" <<EOF
 [Desktop Entry]

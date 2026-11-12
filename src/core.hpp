@@ -285,16 +285,6 @@ struct Settings {
     bool denoise = false;       // шумоподавление записи (FLEY_DENOISE=0 отключает)
     double mic_gain = 2.0;     // цифровое усиление микрофона (для речи издалека); FLEY_MIC_GAIN
     std::string stt_lang = "ru";  // язык распознавания речи; пусто = определять автоматически (FLEY_STT_LANG=auto)
-    // терминал-агент
-    bool agent = true;         // FLEY_AGENT: постоянная оболочка, запись/правка файлов, фоновые задачи, длинные цепочки шагов
-    bool secmode = true;       // FLEY_SECURITY: режим исследователя ИБ (scope целей, методология, заметки)
-    int max_rounds = 25;       // FLEY_MAX_ROUNDS: сколько шагов «действие -> результат» за одну задачу
-    int cmd_timeout = 120;     // FLEY_CMD_TIMEOUT: секунд на команду по умолчанию (максимум 900)
-    int out_limit = 8000;      // FLEY_OUT_LIMIT: сколько байт вывода команды показывать ИИ
-    int max_tokens = 4096;     // FLEY_MAX_TOKENS: длина ответа ИИ (в агент-режиме нужна большая: код)
-    int hist_window = 40;      // FLEY_HISTORY: сколько последних сообщений помнит ИИ в разговоре
-    bool typed_tts = false;    // FLEY_TYPED_TTS: озвучивать ответы на набранный текст
-    std::string workdir;       // FLEY_WORKDIR: рабочая папка (по умолчанию ~/fley-work)
 };
 
 inline void split_url(std::string url, std::string& host, std::string& path) {
@@ -404,25 +394,6 @@ inline Settings make_settings(const std::map<std::string, std::string>& env, con
         s.stt_lang = (l == "auto" || l == "none" || l == "0") ? "" : l.substr(0, 5);
     }
     s.threshold = std::strtod(get("FLEY_VOICE_THRESHOLD", "0").c_str(), nullptr);
-    {
-        auto flag = [&](const char* k, bool def) {
-            std::string v = to_lower_ascii(get(k, def ? "1" : "0"));
-            return !(v == "0" || v == "false" || v == "no" || v == "off");
-        };
-        auto num = [&](const char* k, int def, int lo, int hi) {
-            int v = atoi(get(k, std::to_string(def)).c_str());
-            return v < lo || v > hi ? def : v;
-        };
-        s.agent = flag("FLEY_AGENT", true);
-        s.secmode = flag("FLEY_SECURITY", true);
-        s.typed_tts = flag("FLEY_TYPED_TTS", false);
-        s.max_rounds = s.agent ? num("FLEY_MAX_ROUNDS", 25, 1, 100) : 5;
-        s.cmd_timeout = num("FLEY_CMD_TIMEOUT", 120, 5, 900);
-        s.out_limit = num("FLEY_OUT_LIMIT", 8000, 1000, 30000);
-        s.max_tokens = s.agent ? num("FLEY_MAX_TOKENS", 4096, 450, 16000) : 450;
-        s.hist_window = num("FLEY_HISTORY", 40, 10, 120);
-        s.workdir = get("FLEY_WORKDIR", "");
-    }
     return s;
 }
 
