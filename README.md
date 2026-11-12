@@ -7,6 +7,9 @@
 ```bash
 bash bulid.sh
 
+cd build
+
+./flеy-ai
 ```
 
 ```bash
