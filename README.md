@@ -7,6 +7,10 @@
 
 ![Image description](2.jpg)
 
+![Image description](3.jpg)
+
+Настойки нужно так
+
 ## Запуск (один скрипт)
 ```bash
 bash bulid.sh
