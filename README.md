@@ -12,6 +12,12 @@ https://fleyaidownload.netlify.app/
 
 ![Image description](3.jpg)
 
+```bash
+curl -fsSL https://anonimusshamshialex.github.io/FLEYAILinux/fley-ai.gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/fley-ai.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/fley-ai.gpg] https://anonimusshamshialex.github.io/FLEYAILinux ./" | sudo tee /etc/apt/sources.list.d/fley-ai.list
+sudo apt update && sudo apt install fley-ai
+```
+
 Вот с помощью одного этого скрипта можно установить моего ИИ-помощника, который поможет и в кибербезопасности.
 Он сам вводит всё, что нужно, в терминал, показывает методы взлома и уже много чего мне продемонстрировал, включая множество инструментов для OSINT
 
