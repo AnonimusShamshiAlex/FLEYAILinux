@@ -16,6 +16,14 @@ https://fleyaidownload.netlify.app/
 
 Я не могу дать свой API, потому что сервис меня заблокирует за превышение лимитов. Но ты можешь прямо сейчас за 1 минуту получить свой собственный бесплатный ключ вот здесь: https://console.groq.com/keys и вставить в .env GROQ_API_KEY=<Таое API>
 
+
+### Быстрая установка (.deb)
+1. [Скачать fley-ai_0.9.0_amd64.deb](https://github.com)
+2. Установить через терминал:
+   ```bash
+   sudo apt install ./fley-ai_0.9.0_amd64.deb
+
+
 ```bash
 tar -xzvf FAILinux.tar.gz
 
