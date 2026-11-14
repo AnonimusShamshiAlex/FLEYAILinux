@@ -6,9 +6,9 @@ FLEY AI-Voce — голосовой AI-ассистент, который не �
 
 https://fleyaidownload.netlify.app/
 
-![Image description](1.jpg)
+![Image description](111.jpg)
 
-![Image description](2.jpg)
+![Image description](100.jpg)
 
 ![Image description](3.jpg)
 
