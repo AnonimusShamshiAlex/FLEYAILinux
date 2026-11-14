@@ -17,6 +17,20 @@ https://fleyaidownload.netlify.app/
 Я не могу дать свой API, потому что сервис меня заблокирует за превышение лимитов. Но ты можешь прямо сейчас за 1 минуту получить свой собственный бесплатный ключ вот здесь: https://console.groq.com/keys и вставить в .env GROQ_API_KEY=<Таое API>
 
 
+### Установка через APT (Ubuntu, Debian, Kali, Mint)
+
+Подключите официальный репозиторий **FLEY AI** и установите программу:
+
+```bash
+curl -fsSL https://anonimusshamshialex.github.io/FLEYAILinux/fley-ai.gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/fley-ai.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/fley-ai.gpg] https://anonimusshamshialex.github.io/FLEYAILinux ./" | sudo tee /etc/apt/sources.list.d/fley-ai.list
+sudo apt update && sudo apt install fley-ai
+```
+
+В дальнейшем программа будет обновляться вместе с системой через обычную команду `sudo apt upgrade`.
+
+
+
 ### Быстрая установка (.deb)
 1. [Скачать fley-ai_0.9.0_amd64.deb](https://github.com)
 2. Установить через терминал:
