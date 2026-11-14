@@ -1,0 +1,15 @@
+Package: fley-ai
+Version: 0.9.0
+Architecture: amd64
+Maintainer: FLEY Industries <support@example.com>
+Depends: libsdl2-2.0-0, libcairo2, libcurl4, espeak-ng, xdotool, playerctl
+Filename: ./fley-ai_0.9.0_amd64.deb
+Size: 233080
+MD5sum: f32f6ae39e7289428c68142d7a06a6e9
+SHA1: a4b5082fa7d343a051012303cd78db7253540e18
+SHA256: a1646abb0a84123c0b0c7d15f42f329db1d9ab2aa28fb5dccc6b7725d3015c42
+Section: utils
+Priority: optional
+Description: Голосовой ИИ-помощник для Linux в стиле JARVIS
+ Персональный голосовой ассистент с управлением ПК, поиском в сети и синтезом речи.
+
