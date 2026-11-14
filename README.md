@@ -34,8 +34,8 @@ sudo apt update && sudo apt install fley-ai
 ### Быстрая установка (.deb)
 1. [Скачать fley-ai_0.9.0_amd64.deb](https://github.com)
 2. Установить через терминал:
-   ```bash
-   sudo apt install ./fley-ai_0.9.0_amd64.deb
+```bash
+sudo apt install ./fley-ai_0.9.0_amd64.deb
 
 
 ```bash
