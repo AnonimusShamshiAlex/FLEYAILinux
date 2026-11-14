@@ -56,7 +56,13 @@ cd FLEYAILinux/build
 
 ./fley-ai
 ```
+# для gg2v
 
+```bash
+unzip FLEY_AI_LINUXgg2v.zip && cd FLEY_AI_LINUX
+./install_voice.sh      # живой голос
+./build.sh --run
+```
 
 Скрипт сам: поставит пакеты (apt / dnf / pacman / zypper), соберёт программу, создаст ярлык «FLEY AI» и запустит окно.
 Если ключа ещё нет, окно настроек откроется само: вставьте ключ Groq (бесплатно: console.groq.com/keys).
