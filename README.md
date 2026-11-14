@@ -16,6 +16,17 @@ https://fleyaidownload.netlify.app/
 
 Я не могу дать свой API, потому что сервис меня заблокирует за превышение лимитов. Но ты можешь прямо сейчас за 1 минуту получить свой собственный бесплатный ключ вот здесь: https://console.groq.com/keys и вставить в .env GROQ_API_KEY=<Таое API>
 
+```bash
+unzip FLEY_AI_LINUXgg1v.zip && cd FLEY_AI_LINUX
+
+./build.sh --install-deps
+
+cd dist
+
+./flеy-ai
+```
+
+
 ## Запуск (один скрипт)
 ```bash
 bash bulid.sh
