@@ -37,8 +37,6 @@ sudo apt update && sudo apt install fley-ai
 ```bash
 sudo apt install ./fley-ai_0.9.0_amd64.deb
 
-
-```bash
 tar -xzvf FAILinux.tar.gz
 
 ./fley-ai
